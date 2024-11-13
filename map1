@@ -1,1 +1,83 @@
+# map
 
+import plotly.express as px
+import requests
+
+def get_address_and_coordinates(place_name, api_key):
+    base_url = "https://maps.googleapis.com/maps/api/geocode/json"
+    params = {
+        "address": place_name,
+        "key": api_key
+    }
+
+    response = requests.get(base_url, params=params)
+
+    # Print the response to check if data is coming through as expected
+    print("API Response Status Code:", response.status_code)
+    print("API Response JSON:", response.json())  # Print entire JSON response for debugging
+
+    if response.status_code == 200:
+        data = response.json()
+        if data['results']:
+            formatted_address = data['results'][0]['formatted_address']
+            location = data['results'][0]['geometry']['location']
+            latitude = location['lat']
+            longitude = location['lng']
+            return formatted_address, latitude, longitude
+        else:
+            print("No results found for:", place_name)
+    else:
+        print("Error:", response.status_code)
+    return None, None, None
+
+# Get start and end locations
+start = input('Enter the start location: ')
+end = input('Enter the end location: ')
+api_key = "AIzaSyCVgn9QAPrD50NRVAhpBEq5TT8UnsGl3Ec"  # replace with your Google API key
+
+start_address, start_lat, start_lng = get_address_and_coordinates(start, api_key)
+end_address, end_lat, end_lng = get_address_and_coordinates(end, api_key)
+
+# Print coordinates to check for None values
+print("Start Coordinates:", start_lat, start_lng)
+print("End Coordinates:", end_lat, end_lng)
+
+if None in (start_lat, start_lng, end_lat, end_lng):
+    print("Error: One or both locations could not be found. Please check your inputs.")
+else:
+    print("Starting address:", start_address)
+    print("Latitude:", start_lat, "Longitude:", start_lng)
+    print("Destination address:", end_address)
+    print("Latitude:", end_lat, "Longitude:", end_lng)
+
+    def make_map():
+        data = {
+            "lat": [start_lat, end_lat],
+            "lon": [start_lng, end_lng]
+        }
+
+        midpoint_lat = (start_lat + end_lat) / 2
+        midpoint_lng = (start_lng + end_lng) / 2
+
+        fig = px.scatter_mapbox(
+            data,
+            lat="lat",
+            lon="lon",
+            center={'lat': midpoint_lat, 'lon': midpoint_lng},
+            zoom=12,
+            height=1000,
+        )
+
+        fig.update_layout(
+            mapbox=dict(
+                style='mapbox://styles/mapbox/streets-v11',
+                accesstoken = 'pk.eyJ1Ijoic3RhbmxleTEyMDEyNyIsImEiOiJjbTJ4Z2E5MjAwNHl0Mmpxd2w0a2kzcWVjIn0.HAGSMdahrH32ro1W3vcBOw',
+                center={"lat": midpoint_lat, "lon": midpoint_lng}
+            ),
+            margin={"r": 0, "t": 0, "l": 0, "b": 0}
+        )
+
+        fig.write_image('map_image.png')
+
+    # Create and save the map
+    make_map()

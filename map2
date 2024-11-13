@@ -1,0 +1,108 @@
+# map
+
+import numpy as np
+import cv2
+import matplotlib.pyplot as plt
+from queue import PriorityQueue
+
+# Load the map image and create walkability map
+map_image = cv2.imread("map_image.png")
+if map_image is None:
+    print("Error: Image not loaded. Please check the file path and try again.")
+else:
+    gray_map = cv2.cvtColor(map_image, cv2.COLOR_BGR2GRAY) if map_image.shape[2] == 3 else map_image
+    _, walkability_map = cv2.threshold(gray_map, 200, 255, cv2.THRESH_BINARY)
+    print("Walkability map created successfully.")
+
+def find_nearest_road(point, walkability_map, search_radius=10):
+    """Find the nearest road pixel to the given point if it is not on a road."""
+    x, y = point
+    if walkability_map[y, x] == 255:
+        return point  # Already on a road
+
+    height, width = walkability_map.shape
+
+    # Look around the point within the specified radius
+    for r in range(1, search_radius + 1):
+        for dx in range(-r, r + 1):
+            for dy in range(-r, r + 1):
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < width and 0 <= ny < height and walkability_map[ny, nx] == 255:
+                    return (nx, ny)  # Found the nearest road pixel
+
+    print("No nearby road found within radius:", search_radius)
+    return point  # Return the original point if no road is found within the radius
+
+# Define start and goal positions, ensuring they are on a road
+initial_start = (50, 500)  # User-defined starting point
+initial_goal = (300, 400)  # User-defined goal point
+
+start = find_nearest_road(initial_start, walkability_map)
+goal = find_nearest_road(initial_goal, walkability_map)
+print(f"Adjusted Start: {start}, Adjusted Goal: {goal}")
+
+# Helper functions for A* Pathfinding
+def heuristic(a, b):
+    return np.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
+
+def distance(a, b):
+    return np.sqrt(2) if a[0] != b[0] and a[1] != b[1] else 1
+
+def get_neighbors(node, walkability_map):
+    x, y = node
+    neighbors = []
+    height, width = walkability_map.shape
+    directions = [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1)]
+    for dx, dy in directions:
+        nx, ny = x + dx, y + dy
+        if 0 <= nx < width and 0 <= ny < height and walkability_map[ny, nx] == 255:
+            neighbors.append((nx, ny))
+    return neighbors
+
+def reconstruct_path(came_from, current):
+    path = [current]
+    while current in came_from:
+        current = came_from[current]
+        path.append(current)
+    path.reverse()
+    return path
+
+# Define A* pathfinding algorithm
+def a_star(start, goal, walkability_map):
+    open_set = PriorityQueue()
+    open_set.put((0, start))
+    came_from = {}
+    g_score = {start: 0}
+    f_score = {start: heuristic(start, goal)}
+
+    while not open_set.empty():
+        _, current = open_set.get()
+        if current == goal:
+            return reconstruct_path(came_from, current)
+
+        for neighbor in get_neighbors(current, walkability_map):
+            tentative_g_score = g_score[current] + distance(current, neighbor)
+            if tentative_g_score < g_score.get(neighbor, float("inf")):
+                came_from[neighbor] = current
+                g_score[neighbor] = tentative_g_score
+                f_score[neighbor] = tentative_g_score + heuristic(neighbor, goal)
+                open_set.put((f_score[neighbor], neighbor))
+
+    return None
+
+# Visualization function
+def visualize_path(path, original_map):
+    map_img_colored = cv2.cvtColor(original_map, cv2.COLOR_GRAY2RGB) if len(original_map.shape) == 2 else original_map.copy()
+    for point in path:
+        map_img_colored[point[1], point[0]] = (255, 0, 0)  # path color
+
+    plt.imshow(cv2.cvtColor(map_img_colored, cv2.COLOR_BGR2RGB))
+    plt.scatter(*zip(*[start, goal]), color='yellow', marker='o')
+    plt.show()
+
+# Run the algorithm and visualize
+path = a_star(start, goal, walkability_map)
+if path:
+    visualize_path(path, map_image)
+else:
+    print("No path found")
